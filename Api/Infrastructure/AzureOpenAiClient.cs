@@ -99,36 +99,29 @@ public sealed class AzureOpenAiClient
         if (!response.IsSuccessStatusCode)
         {
             var requestUrl = response.RequestMessage?.RequestUri;
-            var hostPath = requestUrl is null
+            var url = requestUrl is null
                 ? "<unknown>"
-                : $"{requestUrl.Host}{requestUrl.AbsolutePath}";
+                : requestUrl.ToString();
 
             var truncatedBody = responseJson.Length > 4000
                 ? responseJson[..4000]
                 : responseJson;
 
             var message =
-                $"AzureOpenAI call failed: {(int)response.StatusCode} {response.ReasonPhrase} | Url: {hostPath} | Body: {truncatedBody}";
+                $"AzureOpenAI call failed: {(int)response.StatusCode} {response.ReasonPhrase} | Url: {url} | Body: {truncatedBody}";
 
             throw new InvalidOperationException(message);
         }
 
-        var envelope = JsonSerializer.Deserialize<ResponsesApiEnvelope>(responseJson, _serializerOptions)
-                       ?? throw new InvalidOperationException("invalid_model_output: empty_response");
+        var outputText = ExtractOutputText(responseJson);
 
-        var outputJson = envelope.OutputText
-                         ?? envelope.Output?
-                             .FirstOrDefault()?
-                             .Content?
-                             .FirstOrDefault()?
-                             .Text;
-
-        if (string.IsNullOrWhiteSpace(outputJson))
+        if (string.IsNullOrWhiteSpace(outputText))
         {
-            throw new InvalidOperationException("invalid_model_output: missing_output_text");
+            var truncated = responseJson.Length > 1000 ? responseJson[..1000] : responseJson;
+            throw new InvalidOperationException($"invalid_model_output: missing_output_text | raw={truncated}");
         }
 
-        return NormalizeToJson(outputJson);
+        return NormalizeToJson(outputText);
     }
 
     public Uri GetResponsesUrl()
@@ -145,14 +138,7 @@ public sealed class AzureOpenAiClient
             throw new InvalidOperationException("invalid_config: invalid_endpoint_uri");
         }
 
-        var host = baseUri.Host;
-
-        if (!IsSupportedHost(host))
-        {
-            throw new InvalidOperationException($"invalid_config: unsupported_endpoint ({host})");
-        }
-
-        return new Uri($"{baseUri.Scheme}://{baseUri.Authority}/openai/v1/responses");
+        return BuildResponsesUrl(baseUri);
     }
 
     public AzureOpenAiConfigStatus GetConfigStatus()
@@ -164,6 +150,7 @@ public sealed class AzureOpenAiClient
 
         string? host = null;
         var mode = "unknown";
+        string? responsesUrl = null;
 
         if (hasEndpoint && Uri.TryCreate(_endpoint, UriKind.Absolute, out var uri))
         {
@@ -180,6 +167,15 @@ public sealed class AzureOpenAiClient
                     mode = "foundry";
                 }
             }
+
+            try
+            {
+                responsesUrl = BuildResponsesUrl(uri).ToString();
+            }
+            catch
+            {
+                responsesUrl = null;
+            }
         }
 
         return new AzureOpenAiConfigStatus(
@@ -187,18 +183,31 @@ public sealed class AzureOpenAiClient
             hasApiKey,
             deploymentName,
             host,
-            mode);
+            mode,
+            responsesUrl);
     }
 
-    private static bool IsSupportedHost(string host)
+    private static Uri BuildResponsesUrl(Uri baseUri)
     {
-        if (string.IsNullOrWhiteSpace(host))
+        var host = baseUri.Host;
+
+        if (host.EndsWith(".openai.azure.com", StringComparison.OrdinalIgnoreCase))
         {
-            return false;
+            var builder = new UriBuilder(baseUri)
+            {
+                Path = "/openai/responses",
+                Query = "api-version=2025-04-01-preview"
+            };
+
+            return builder.Uri;
         }
 
-        return host.EndsWith(".openai.azure.com", StringComparison.OrdinalIgnoreCase)
-               || host.EndsWith(".services.ai.azure.com", StringComparison.OrdinalIgnoreCase);
+        if (host.EndsWith(".services.ai.azure.com", StringComparison.OrdinalIgnoreCase))
+        {
+            return new Uri($"{baseUri.Scheme}://{baseUri.Authority}/openai/v1/responses");
+        }
+
+        throw new InvalidOperationException($"invalid_config: unsupported_endpoint ({host})");
     }
 
     private static string NormalizeToJson(string text)
@@ -249,34 +258,99 @@ public sealed class AzureOpenAiClient
         return t;
     }
 
-    private sealed class ResponsesApiEnvelope
+    private static string? ExtractOutputText(string responseJson)
     {
-        [JsonPropertyName("output_text")]
-        public string? OutputText { get; init; }
+        if (string.IsNullOrWhiteSpace(responseJson))
+        {
+            return null;
+        }
 
-        [JsonPropertyName("output")]
-        public List<OutputItem>? Output { get; init; }
+        using var document = JsonDocument.Parse(responseJson);
+        var root = document.RootElement;
+
+        // 1) $.output_text
+        if (root.TryGetProperty("output_text", out var outputTextElement) &&
+            outputTextElement.ValueKind == JsonValueKind.String)
+        {
+            return outputTextElement.GetString();
+        }
+
+        // 2) $.output[0].content[0].text
+        if (TryGetFirstOutputContent(root, out var contentElement))
+        {
+            if (contentElement.TryGetProperty("text", out var textElement) &&
+                textElement.ValueKind == JsonValueKind.String)
+            {
+                return textElement.GetString();
+            }
+
+            // 3) $.output[0].content[0].output_text (if such shape exists)
+            if (contentElement.TryGetProperty("output_text", out var contentOutputTextElement) &&
+                contentOutputTextElement.ValueKind == JsonValueKind.String)
+            {
+                return contentOutputTextElement.GetString();
+            }
+        }
+
+        // 4) Chat completions style: $.choices[0].message.content
+        if (TryGetFirstChoice(root, out var choiceElement))
+        {
+            if (choiceElement.TryGetProperty("message", out var messageElement) &&
+                messageElement.ValueKind == JsonValueKind.Object &&
+                messageElement.TryGetProperty("content", out var messageContentElement) &&
+                messageContentElement.ValueKind == JsonValueKind.String)
+            {
+                return messageContentElement.GetString();
+            }
+
+            // 5) Chat completions style: $.choices[0].text
+            if (choiceElement.TryGetProperty("text", out var choiceTextElement) &&
+                choiceTextElement.ValueKind == JsonValueKind.String)
+            {
+                return choiceTextElement.GetString();
+            }
+        }
+
+        return null;
     }
 
-    private sealed class OutputItem
+    private static bool TryGetFirstOutputContent(JsonElement root, out JsonElement contentElement)
     {
-        [JsonPropertyName("type")]
-        public string? Type { get; init; }
+        contentElement = default;
 
-        [JsonPropertyName("role")]
-        public string? Role { get; init; }
+        if (!root.TryGetProperty("output", out var outputElement) ||
+            outputElement.ValueKind != JsonValueKind.Array ||
+            outputElement.GetArrayLength() == 0)
+        {
+            return false;
+        }
 
-        [JsonPropertyName("content")]
-        public List<OutputContentItem>? Content { get; init; }
+        var firstOutput = outputElement[0];
+
+        if (!firstOutput.TryGetProperty("content", out var contentArray) ||
+            contentArray.ValueKind != JsonValueKind.Array ||
+            contentArray.GetArrayLength() == 0)
+        {
+            return false;
+        }
+
+        contentElement = contentArray[0];
+        return contentElement.ValueKind == JsonValueKind.Object;
     }
 
-    private sealed class OutputContentItem
+    private static bool TryGetFirstChoice(JsonElement root, out JsonElement choiceElement)
     {
-        [JsonPropertyName("type")]
-        public string? Type { get; init; }
+        choiceElement = default;
 
-        [JsonPropertyName("text")]
-        public string? Text { get; init; }
+        if (!root.TryGetProperty("choices", out var choicesElement) ||
+            choicesElement.ValueKind != JsonValueKind.Array ||
+            choicesElement.GetArrayLength() == 0)
+        {
+            return false;
+        }
+
+        choiceElement = choicesElement[0];
+        return choiceElement.ValueKind == JsonValueKind.Object;
     }
 
     public sealed record AzureOpenAiConfigStatus(
@@ -284,6 +358,7 @@ public sealed class AzureOpenAiClient
         bool HasApiKey,
         string? DeploymentName,
         string? EndpointHost,
-        string Mode);
+        string Mode,
+        string? ResponsesUrl);
 }
 

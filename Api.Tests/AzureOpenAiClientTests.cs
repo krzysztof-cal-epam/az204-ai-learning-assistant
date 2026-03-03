@@ -48,7 +48,7 @@ public sealed class AzureOpenAiClientTests
         var uri = client.GetResponsesUrl();
 
         // Assert
-        Assert.Equal("https://foo.openai.azure.com/openai/v1/responses", uri.ToString());
+        Assert.Equal("https://foo.openai.azure.com/openai/responses?api-version=2025-04-01-preview", uri.ToString());
     }
 
     [Fact]

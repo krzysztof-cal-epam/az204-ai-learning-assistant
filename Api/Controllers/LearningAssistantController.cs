@@ -34,22 +34,23 @@ public sealed class LearningAssistantController : ControllerBase
         return Ok(result);
     }
 
-        [HttpGet("Health")]
-        [ProducesResponseType(typeof(LearningAssistantHealthResponse), StatusCodes.Status200OK)]
-        public ActionResult<LearningAssistantHealthResponse> Health()
+    [HttpGet("Health")]
+    [ProducesResponseType(typeof(LearningAssistantHealthResponse), StatusCodes.Status200OK)]
+    public ActionResult<LearningAssistantHealthResponse> Health()
+    {
+        var status = _azureOpenAiClient.GetConfigStatus();
+
+        var response = new LearningAssistantHealthResponse
         {
-            var status = _azureOpenAiClient.GetConfigStatus();
+            HasEndpoint = status.HasEndpoint,
+            HasApiKey = status.HasApiKey,
+            DeploymentName = status.DeploymentName,
+            EndpointHost = status.EndpointHost,
+            Mode = status.Mode,
+            ResponsesUrl = status.ResponsesUrl
+        };
 
-            var response = new LearningAssistantHealthResponse
-            {
-                HasEndpoint = status.HasEndpoint,
-                HasApiKey = status.HasApiKey,
-                DeploymentName = status.DeploymentName,
-                EndpointHost = status.EndpointHost,
-                Mode = status.Mode
-            };
-
-            return Ok(response);
-        }
+        return Ok(response);
+    }
 }
 

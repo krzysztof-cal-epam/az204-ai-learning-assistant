@@ -11,5 +11,7 @@ public sealed class LearningAssistantHealthResponse
     public string? EndpointHost { get; init; }
 
     public string Mode { get; init; } = "unknown";
+
+    public string? ResponsesUrl { get; init; }
 }
 
