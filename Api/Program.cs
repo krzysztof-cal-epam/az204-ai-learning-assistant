@@ -4,11 +4,17 @@ var builder = WebApplication.CreateBuilder(args);
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
+// HTTP clients
+builder.Services.AddHttpClient();
+
 // MVC / controllers
 builder.Services.AddControllers();
 
 // Core application services
 builder.Services.AddScoped<Az204AiLearningAssistant.Api.Application.IAiLearningAssistantService, Az204AiLearningAssistant.Api.Application.AiLearningAssistantService>();
+
+// Infrastructure
+builder.Services.AddScoped<Az204AiLearningAssistant.Api.Infrastructure.AzureOpenAiClient>();
 
 // Validation components
 builder.Services.AddSingleton<Az204AiLearningAssistant.Api.Validation.ITopicAllowlistValidator, Az204AiLearningAssistant.Api.Validation.TopicAllowlistValidator>();

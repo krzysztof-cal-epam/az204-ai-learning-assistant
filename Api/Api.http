@@ -4,3 +4,27 @@ GET {{Api_HostAddress}}/weatherforecast/
 Accept: application/json
 
 ###
+
+POST {{Api_HostAddress}}/api/LearningAssistant/GenerateQuiz
+Content-Type: application/json
+Accept: application/json
+
+{
+  "topic": "azure-functions",
+  "questionCount": 3,
+  "difficulty": "beginner"
+}
+
+###
+
+POST {{Api_HostAddress}}/api/LearningAssistant/GenerateQuiz
+Content-Type: application/json
+Accept: application/json
+
+{
+  "topic": "not-allowed-topic",
+  "questionCount": 3,
+  "difficulty": "beginner"
+}
+
+###
