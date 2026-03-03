@@ -29,10 +29,7 @@ public sealed class AzureOpenAiClient
 
     public async Task<string> GenerateQuizJsonAsync(string topic, int questionCount, string? difficulty, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(_endpoint) || string.IsNullOrWhiteSpace(_apiKey) || string.IsNullOrWhiteSpace(_deploymentName))
-        {
-            throw new InvalidOperationException("Azure OpenAI configuration is missing or incomplete.");
-        }
+        var requestUri = GetResponsesUrl();
 
         var systemPrompt = "Return ONLY valid JSON. No markdown. Do not wrap in markdown fences.";
 
@@ -90,18 +87,31 @@ public sealed class AzureOpenAiClient
 
         var requestJson = JsonSerializer.Serialize(requestBody, _serializerOptions);
 
-        using var request = new HttpRequestMessage(
-            HttpMethod.Post,
-            $"{_endpoint.TrimEnd('/')}/openai/v1/responses");
+        using var request = new HttpRequestMessage(HttpMethod.Post, requestUri);
 
         request.Headers.Add("api-key", _apiKey);
         request.Content = new StringContent(requestJson, Encoding.UTF8, "application/json");
 
         using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
 
-        response.EnsureSuccessStatusCode();
-
         var responseJson = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var requestUrl = response.RequestMessage?.RequestUri;
+            var hostPath = requestUrl is null
+                ? "<unknown>"
+                : $"{requestUrl.Host}{requestUrl.AbsolutePath}";
+
+            var truncatedBody = responseJson.Length > 4000
+                ? responseJson[..4000]
+                : responseJson;
+
+            var message =
+                $"AzureOpenAI call failed: {(int)response.StatusCode} {response.ReasonPhrase} | Url: {hostPath} | Body: {truncatedBody}";
+
+            throw new InvalidOperationException(message);
+        }
 
         var envelope = JsonSerializer.Deserialize<ResponsesApiEnvelope>(responseJson, _serializerOptions)
                        ?? throw new InvalidOperationException("invalid_model_output: empty_response");
@@ -119,6 +129,76 @@ public sealed class AzureOpenAiClient
         }
 
         return NormalizeToJson(outputJson);
+    }
+
+    public Uri GetResponsesUrl()
+    {
+        if (string.IsNullOrWhiteSpace(_endpoint) ||
+            string.IsNullOrWhiteSpace(_apiKey) ||
+            string.IsNullOrWhiteSpace(_deploymentName))
+        {
+            throw new InvalidOperationException("invalid_config: missing_endpoint_or_key_or_deployment");
+        }
+
+        if (!Uri.TryCreate(_endpoint, UriKind.Absolute, out var baseUri))
+        {
+            throw new InvalidOperationException("invalid_config: invalid_endpoint_uri");
+        }
+
+        var host = baseUri.Host;
+
+        if (!IsSupportedHost(host))
+        {
+            throw new InvalidOperationException($"invalid_config: unsupported_endpoint ({host})");
+        }
+
+        return new Uri($"{baseUri.Scheme}://{baseUri.Authority}/openai/v1/responses");
+    }
+
+    public AzureOpenAiConfigStatus GetConfigStatus()
+    {
+        var hasEndpoint = !string.IsNullOrWhiteSpace(_endpoint);
+        var hasApiKey = !string.IsNullOrWhiteSpace(_apiKey);
+        var hasDeploymentName = !string.IsNullOrWhiteSpace(_deploymentName);
+        var deploymentName = hasDeploymentName ? _deploymentName : null;
+
+        string? host = null;
+        var mode = "unknown";
+
+        if (hasEndpoint && Uri.TryCreate(_endpoint, UriKind.Absolute, out var uri))
+        {
+            host = uri.Host;
+
+            if (host is not null)
+            {
+                if (host.EndsWith(".openai.azure.com", StringComparison.OrdinalIgnoreCase))
+                {
+                    mode = "openai";
+                }
+                else if (host.EndsWith(".services.ai.azure.com", StringComparison.OrdinalIgnoreCase))
+                {
+                    mode = "foundry";
+                }
+            }
+        }
+
+        return new AzureOpenAiConfigStatus(
+            hasEndpoint,
+            hasApiKey,
+            deploymentName,
+            host,
+            mode);
+    }
+
+    private static bool IsSupportedHost(string host)
+    {
+        if (string.IsNullOrWhiteSpace(host))
+        {
+            return false;
+        }
+
+        return host.EndsWith(".openai.azure.com", StringComparison.OrdinalIgnoreCase)
+               || host.EndsWith(".services.ai.azure.com", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string NormalizeToJson(string text)
@@ -198,5 +278,12 @@ public sealed class AzureOpenAiClient
         [JsonPropertyName("text")]
         public string? Text { get; init; }
     }
+
+    public sealed record AzureOpenAiConfigStatus(
+        bool HasEndpoint,
+        bool HasApiKey,
+        string? DeploymentName,
+        string? EndpointHost,
+        string Mode);
 }
 
