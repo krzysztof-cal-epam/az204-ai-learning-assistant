@@ -92,7 +92,7 @@ public sealed class AzureOpenAiClient
 
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
-            $"{_endpoint.TrimEnd('/')}/openai/responses?api-version=2025-04-01-preview");
+            $"{_endpoint.TrimEnd('/')}/openai/v1/responses");
 
         request.Headers.Add("api-key", _apiKey);
         request.Content = new StringContent(requestJson, Encoding.UTF8, "application/json");
