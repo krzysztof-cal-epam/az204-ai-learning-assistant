@@ -334,16 +334,58 @@
             min-width: 18px;
         }
 
-        .option-correct {
-            color: #bbf7d0;
+        .options-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-top: 4px;
         }
 
-        .option-correct .option-label {
+        .option-button {
+            width: 100%;
+            justify-content: flex-start;
+            border-radius: 10px;
+            padding: 6px 10px;
+            background: radial-gradient(circle at top left, rgba(15, 23, 42, 0.95), rgba(15, 23, 42, 0.92));
+        }
+
+        .option-button.selected {
+            border-color: rgba(56, 189, 248, 0.9);
+            box-shadow: 0 0 0 1px rgba(8, 47, 73, 0.9);
+            background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.2), rgba(15, 23, 42, 0.96));
+        }
+
+        .answer-status {
+            margin-top: 6px;
+            font-size: 0.8rem;
+        }
+
+        .answer-status.correct {
             color: #4ade80;
         }
 
-        .option-correct .check {
-            margin-left: 4px;
+        .answer-status.incorrect {
+            color: #fca5a5;
+        }
+
+        .question-footer {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+            margin-top: 6px;
+        }
+
+        .explanation-text {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        .question-error {
+            font-size: 0.78rem;
+            color: #fecaca;
+            margin-top: 4px;
         }
 
         .error-block {
@@ -452,6 +494,15 @@
             const healthContainer = document.getElementById("healthContainer");
             const errorContainer = document.getElementById("errorContainer");
 
+            let quizState = null;
+
+            function resetQuizState() {
+                quizState = {
+                    topic: "",
+                    questions: []
+                };
+            }
+
             function setIdleStatus() {
                 statusPill.classList.remove("loading", "error");
                 statusDot.classList.remove("loading", "error");
@@ -483,6 +534,7 @@
                 quizContainer.innerHTML = "";
                 healthContainer.innerHTML = "";
                 errorContainer.innerHTML = "";
+                resetQuizState();
             }
 
             function renderPre(container, text, label) {
@@ -528,67 +580,126 @@
                 healthContainer.appendChild(wrapper);
             }
 
-            function renderQuiz(jsonOrRaw, isJson) {
-                if (!isJson) {
-                    renderPre(quizContainer, jsonOrRaw, "Raw GenerateQuiz response (non-JSON)");
-                    return;
-                }
+            function renderNonJsonQuiz(raw) {
+                renderPre(quizContainer, raw, "Raw GenerateQuiz response (non-JSON)");
+            }
 
-                const data = jsonOrRaw;
+            function buildQuizStateFromResponse(data) {
                 const topic = data.topic ?? data.Topic ?? "";
                 const questions = data.questions ?? data.Questions ?? [];
 
+                quizState = {
+                    topic: String(topic || ""),
+                    questions: questions.map((q) => {
+                        const options = q.options ?? q.Options ?? [];
+                        const correctIndex = typeof q.correctOptionIndex === "number"
+                            ? q.correctOptionIndex
+                            : (typeof q.CorrectOptionIndex === "number" ? q.CorrectOptionIndex : -1);
+
+                        return {
+                            questionText: String(q.question ?? q.Question ?? ""),
+                            options: options.map((o) => String(o)),
+                            correctOptionIndex: correctIndex,
+                            selectedIndex: null,
+                            answerStatus: "none", // none | correct | incorrect
+                            explanation: null,
+                            explainStatus: "idle", // idle | loading | error
+                            explainError: null
+                        };
+                    })
+                };
+            }
+
+            function renderQuizFromState() {
+                if (!quizState || !quizState.topic || !Array.isArray(quizState.questions)) {
+                    quizContainer.innerHTML = "";
+                    return;
+                }
+
                 const topicEl = document.createElement("div");
                 topicEl.className = "quiz-topic";
-                topicEl.innerHTML = 'Topic: <span>' + String(topic || "(unknown)") + "</span>";
+                topicEl.innerHTML = 'Topic: <span>' + (quizState.topic || "(unknown)") + "</span>";
 
                 const list = document.createElement("div");
-
                 const letters = ["A", "B", "C", "D", "E", "F"];
 
-                questions.forEach((q, index) => {
+                quizState.questions.forEach((q, index) => {
                     const questionDiv = document.createElement("div");
                     questionDiv.className = "question";
 
                     const title = document.createElement("div");
                     title.className = "question-title";
-                    title.textContent = (index + 1) + ". " + String(q.question ?? q.Question ?? "");
+                    title.textContent = (index + 1) + ". " + q.questionText;
                     questionDiv.appendChild(title);
 
-                    const options = q.options ?? q.Options ?? [];
-                    const correctIndex = typeof q.correctOptionIndex === "number"
-                        ? q.correctOptionIndex
-                        : (typeof q.CorrectOptionIndex === "number" ? q.CorrectOptionIndex : -1);
+                    const optionsWrapper = document.createElement("div");
+                    optionsWrapper.className = "options-grid";
 
-                    const ul = document.createElement("ul");
-                    ul.className = "options";
-
-                    options.forEach((opt, i) => {
-                        const li = document.createElement("li");
-                        const isCorrect = i === correctIndex;
-                        li.className = "option" + (isCorrect ? " option-correct" : "");
+                    q.options.forEach((opt, i) => {
+                        const btn = document.createElement("button");
+                        btn.type = "button";
+                        btn.className = "option-button" + (q.selectedIndex === i ? " selected" : "");
 
                         const label = document.createElement("span");
                         label.className = "option-label";
                         label.textContent = letters[i] ?? "?";
 
                         const text = document.createElement("span");
-                        text.textContent = String(opt);
+                        text.textContent = opt;
 
-                        li.appendChild(label);
-                        li.appendChild(text);
+                        btn.appendChild(label);
+                        btn.appendChild(text);
 
-                        if (isCorrect) {
-                            const check = document.createElement("span");
-                            check.className = "check";
-                            check.textContent = "✅";
-                            li.appendChild(check);
-                        }
+                        btn.addEventListener("click", function () {
+                            handleOptionClick(index, i);
+                        });
 
-                        ul.appendChild(li);
+                        optionsWrapper.appendChild(btn);
                     });
 
-                    questionDiv.appendChild(ul);
+                    questionDiv.appendChild(optionsWrapper);
+
+                    if (q.answerStatus !== "none") {
+                        const status = document.createElement("div");
+                        status.className = "answer-status " + q.answerStatus;
+                        status.textContent = q.answerStatus === "correct"
+                            ? "Correct"
+                            : "Incorrect";
+                        questionDiv.appendChild(status);
+                    }
+
+                    const footer = document.createElement("div");
+                    footer.className = "question-footer";
+
+                    if (q.answerStatus !== "none") {
+                        const explainBtn = document.createElement("button");
+                        explainBtn.type = "button";
+                        explainBtn.textContent = q.explainStatus === "loading" ? "Explain (loading…)" : "Explain";
+                        explainBtn.disabled = q.explainStatus === "loading";
+                        explainBtn.addEventListener("click", function () {
+                            handleExplainClick(index);
+                        });
+                        footer.appendChild(explainBtn);
+                    }
+
+                    if (footer.children.length > 0) {
+                        questionDiv.appendChild(footer);
+                    }
+
+                    if (q.explanation) {
+                        const explanationEl = document.createElement("div");
+                        explanationEl.className = "explanation-text";
+                        explanationEl.textContent = q.explanation;
+                        questionDiv.appendChild(explanationEl);
+                    }
+
+                    if (q.explainStatus === "error" && q.explainError) {
+                        const errorEl = document.createElement("div");
+                        errorEl.className = "question-error";
+                        errorEl.textContent = q.explainError;
+                        questionDiv.appendChild(errorEl);
+                    }
+
                     list.appendChild(questionDiv);
                 });
 
@@ -597,9 +708,137 @@
                 quizContainer.appendChild(list);
             }
 
+            function renderQuiz(jsonOrRaw, isJson) {
+                if (!isJson) {
+                    renderNonJsonQuiz(jsonOrRaw);
+                    return;
+                }
+
+                buildQuizStateFromResponse(jsonOrRaw);
+                renderQuizFromState();
+            }
+
             function showError(status, bodyText) {
                 const label = "HTTP " + status;
                 renderPre(errorContainer, bodyText || "(empty body)", label);
+            }
+
+            function handleOptionClick(questionIndex, optionIndex) {
+                if (!quizState || !quizState.questions[questionIndex]) {
+                    return;
+                }
+
+                const q = quizState.questions[questionIndex];
+                q.selectedIndex = optionIndex;
+
+                const isCorrect = typeof q.correctOptionIndex === "number" &&
+                    q.correctOptionIndex >= 0 &&
+                    q.correctOptionIndex < q.options.length &&
+                    optionIndex === q.correctOptionIndex;
+
+                q.answerStatus = isCorrect ? "correct" : "incorrect";
+                q.explanation = null;
+                q.explainStatus = "idle";
+                q.explainError = null;
+
+                renderQuizFromState();
+            }
+
+            async function handleExplainClick(questionIndex) {
+                if (!quizState || !quizState.questions[questionIndex]) {
+                    return;
+                }
+
+                const q = quizState.questions[questionIndex];
+                if (q.answerStatus === "none" || q.selectedIndex == null) {
+                    return;
+                }
+
+                const topic = quizState.topic || (topicSelect.value || "").trim();
+                const selectedAnswer = q.options[q.selectedIndex];
+                const correctAnswer = (typeof q.correctOptionIndex === "number" &&
+                    q.correctOptionIndex >= 0 &&
+                    q.correctOptionIndex < q.options.length)
+                    ? q.options[q.correctOptionIndex]
+                    : "";
+
+                const payload = {
+                    topic: topic,
+                    question: q.questionText,
+                    selectedAnswer: selectedAnswer,
+                    correctAnswer: correctAnswer
+                };
+
+                q.explainStatus = "loading";
+                q.explainError = null;
+                renderQuizFromState();
+
+                try {
+                    const response = await fetch("/api/LearningAssistant/ExplainAnswer", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify(payload)
+                    });
+
+                    const text = await response.text();
+
+                    if (!response.ok) {
+                        let errorMessage = "";
+                        try {
+                            const parsed = JSON.parse(text);
+                            const errorCode = parsed.error ?? parsed.Error ?? "";
+                            const message = parsed.message ?? parsed.Message ?? "";
+
+                            if (response.status === 400) {
+                                errorMessage = "HTTP 400 \u2013 " + (errorCode || "Bad Request");
+                                if (message) {
+                                    errorMessage += ": " + message;
+                                }
+                            } else if (response.status === 502) {
+                                const label = errorCode || "LLM invalid output";
+                                errorMessage = label + (message ? (": " + message) : "");
+                            } else {
+                                errorMessage = "HTTP " + response.status + (message ? (": " + message) : "");
+                            }
+                        } catch {
+                            if (response.status === 502) {
+                                errorMessage = "LLM invalid output" + (text ? (": " + text) : "");
+                            } else {
+                                errorMessage = "HTTP " + response.status + (text ? (": " + text) : "");
+                            }
+                        }
+
+                        q.explainStatus = "error";
+                        q.explainError = errorMessage || "Explain request failed.";
+                        setErrorStatus("Explain error");
+                    } else {
+                        try {
+                            const parsedOk = JSON.parse(text);
+                            const explanationText =
+                                parsedOk.explanation ??
+                                parsedOk.Explanation ??
+                                parsedOk.answer ??
+                                parsedOk.Answer ??
+                                text;
+
+                            q.explanation = String(explanationText);
+                        } catch {
+                            q.explanation = text || "";
+                        }
+
+                        q.explainStatus = "idle";
+                        q.explainError = null;
+                        setIdleStatus();
+                    }
+                } catch (err) {
+                    q.explainStatus = "error";
+                    q.explainError = "Network / fetch error: " + String(err);
+                    setErrorStatus("Explain error");
+                } finally {
+                    renderQuizFromState();
+                }
             }
 
             async function callHealth() {
@@ -689,12 +928,6 @@
                     if (!response.ok) {
                         setErrorStatus("HTTP " + response.status);
                         showError(response.status, text);
-                        try {
-                            const parsed = JSON.parse(text);
-                            renderQuiz(parsed, true);
-                        } catch {
-                            renderQuiz(text, false);
-                        }
                         return;
                     }
 
@@ -703,7 +936,7 @@
                         renderQuiz(json, true);
                         setIdleStatus();
                     } catch {
-                        renderQuiz(text, false);
+                        renderNonJsonQuiz(text);
                         setErrorStatus("Non-JSON GenerateQuiz response");
                     }
                 } catch (err) {

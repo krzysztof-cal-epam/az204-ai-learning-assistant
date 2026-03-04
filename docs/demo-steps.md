@@ -42,7 +42,7 @@ In the UI:
      - A summary with `Mode` and `ResponsesUrl`.
      - The full JSON from `GET /api/LearningAssistant/Health`.
 
-### 5. Generate quiz call
+### 5. Generate quiz call + interactive answering
 
 In the UI:
 
@@ -54,8 +54,27 @@ In the UI:
    - Once complete, the **Output** panel shows:
      - The quiz topic.
      - A list of questions.
-     - Options A–D for each question.
-     - The correct option marked with a ✅ icon using `correctOptionIndex`.
+     - Options A–D for each question as clickable buttons.
+   - **No option is highlighted as correct** and there is **no ✅ icon** at this stage.
+
+5. For Question 1:
+   - Click one of the answer options.
+   - Observe:
+     - The clicked option stays visually selected.
+     - A status line appears under the question saying **Correct** or **Incorrect**.
+     - An **Explain** button appears for that question.
+   - Click a different option:
+     - The selection moves to the newly clicked option.
+     - The status line updates to reflect the new choice (Correct/Incorrect).
+
+6. While a question is selected, click **Explain**:
+   - The button shows a loading state (e.g. “Explain (loading…)”) and is disabled during the call.
+   - After a short time, an explanation text appears under the question.
+   - If the backend returns a 400 or 502 for Explain, an error message appears directly under that question, and the global status pill shows an error state.
+
+7. Click **Generate** again with the same or different topic:
+   - The previous quiz, selections, explanations, and per-question errors are cleared.
+   - A fresh quiz is rendered with no pre-selected answers and no ✅ icons.
 
 If the model is slow, the UI stays on **Loading…** until a response arrives.
 
