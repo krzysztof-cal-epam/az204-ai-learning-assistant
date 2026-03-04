@@ -87,6 +87,21 @@ public sealed class AiLearningAssistantService : IAiLearningAssistantService
 
     public async Task<ExplainAnswerResponse> ExplainAnswerAsync(ExplainAnswerRequest request, CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrWhiteSpace(request.Question) || request.Question.Length < 10)
+        {
+            throw new ArgumentException("Invalid question.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.SelectedAnswer))
+        {
+            throw new ArgumentException("Invalid selectedAnswer.");
+        }
+
+        if (request.CorrectAnswer is not null && string.IsNullOrWhiteSpace(request.CorrectAnswer))
+        {
+            throw new ArgumentException("Invalid correctAnswer.");
+        }
+
         if (!_topicAllowlistValidator.IsAllowedTopic(request.Topic))
         {
             throw new InvalidOperationException("Requested topic is not allowed.");

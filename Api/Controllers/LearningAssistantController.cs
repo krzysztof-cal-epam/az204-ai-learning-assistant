@@ -84,6 +84,24 @@ public sealed class LearningAssistantController : ControllerBase
             var result = await _assistantService.ExplainAnswerAsync(request, cancellationToken);
             return Ok(result);
         }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new
+            {
+                error = "invalid_request",
+                message = ex.Message
+            });
+        }
+        catch (InvalidOperationException ex) when (
+            ex.Message.Contains("invalid_model_output", StringComparison.Ordinal) ||
+            ex.Message.Contains("missing_output_text", StringComparison.Ordinal))
+        {
+            return StatusCode(StatusCodes.Status502BadGateway, new
+            {
+                error = "llm_invalid_output",
+                message = "LLM response missing explanation text."
+            });
+        }
         catch (InvalidOperationException ex) when (ex.Message == "Requested topic is not allowed.")
         {
             return BadRequest(new
