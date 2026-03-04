@@ -22,8 +22,19 @@ public sealed class LearningAssistantController : ControllerBase
     [ProducesResponseType(typeof(GenerateQuizResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<GenerateQuizResponse>> GenerateQuiz([FromBody] GenerateQuizRequest request, CancellationToken cancellationToken)
     {
-        var result = await _assistantService.GenerateQuizAsync(request, cancellationToken);
-        return Ok(result);
+        try
+        {
+            var result = await _assistantService.GenerateQuizAsync(request, cancellationToken);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex) when (ex.Message == "Requested topic is not allowed.")
+        {
+            return BadRequest(new
+            {
+                error = "invalid_topic",
+                message = ex.Message
+            });
+        }
     }
 
     [HttpGet("SmokeQuiz")]
@@ -49,8 +60,19 @@ public sealed class LearningAssistantController : ControllerBase
             QuestionCount = count
         };
 
-        var result = await _assistantService.GenerateQuizAsync(request, cancellationToken);
-        return Ok(result);
+        try
+        {
+            var result = await _assistantService.GenerateQuizAsync(request, cancellationToken);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex) when (ex.Message == "Requested topic is not allowed.")
+        {
+            return BadRequest(new
+            {
+                error = "invalid_topic",
+                message = ex.Message
+            });
+        }
     }
 
     [HttpPost("ExplainAnswer")]
