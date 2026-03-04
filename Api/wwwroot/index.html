@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>AZ-204 Quiz Generator (PoC)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+        :root {
+            color-scheme: light dark;
+            --bg: #0f172a;
+            --bg-alt: #020617;
+            --card: #111827;
+            --accent: #38bdf8;
+            --accent-soft: rgba(56, 189, 248, 0.15);
+            --border: #1f2937;
+            --text: #e5e7eb;
+            --text-muted: #9ca3af;
+            --danger: #f97373;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: radial-gradient(circle at top left, #1d283a, #020617);
+            color: var(--text);
+            display: flex;
+            justify-content: center;
+            align-items: stretch;
+            padding: 24px;
+        }
+
+        .shell {
+            width: 100%;
+            max-width: 960px;
+            background: linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(129, 140, 248, 0.08));
+            border-radius: 18px;
+            padding: 1px;
+            box-shadow:
+                0 22px 45px rgba(15, 23, 42, 0.9),
+                0 0 0 1px rgba(15, 23, 42, 0.8);
+        }
+
+        .app {
+            background: radial-gradient(circle at top, rgba(15, 23, 42, 0.9), #020617);
+            border-radius: 17px;
+            padding: 20px 22px 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+        }
+
+        .title-block h1 {
+            margin: 0;
+            font-size: 1.4rem;
+            letter-spacing: 0.02em;
+        }
+
+        .title-block p {
+            margin: 4px 0 0;
+            font-size: 0.82rem;
+            color: var(--text-muted);
+        }
+
+        .badge {
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: rgba(15, 118, 110, 0.2);
+            border: 1px solid rgba(45, 212, 191, 0.4);
+            font-size: 0.75rem;
+            color: #5eead4;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+        }
+
+        .badge-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 999px;
+            background: #22c55e;
+            box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.25);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 280px minmax(0, 1fr);
+            gap: 18px;
+        }
+
+        @media (max-width: 800px) {
+            body {
+                padding: 12px;
+            }
+
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .panel {
+            background: radial-gradient(circle at top left, rgba(15, 23, 42, 0.9), #020617);
+            border-radius: 14px;
+            border: 1px solid rgba(31, 41, 55, 0.9);
+            padding: 14px 14px 16px;
+            box-shadow:
+                0 16px 30px rgba(15, 23, 42, 0.9),
+                inset 0 0 0 1px rgba(15, 23, 42, 0.8);
+        }
+
+        .panel h2 {
+            margin: 0 0 10px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        .form-field {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            margin-bottom: 12px;
+        }
+
+        label {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        select,
+        input[type="number"] {
+            background: #020617;
+            border-radius: 9px;
+            border: 1px solid var(--border);
+            padding: 7px 9px;
+            font-size: 0.85rem;
+            color: var(--text);
+            outline: none;
+            transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+        }
+
+        select:focus,
+        input[type="number"]:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.4);
+            background: #020617;
+        }
+
+        .hint {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .buttons {
+            display: flex;
+            gap: 8px;
+            margin-top: 4px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            border-radius: 999px;
+            padding: 7px 14px;
+            border: 1px solid rgba(55, 65, 81, 1);
+            background: radial-gradient(circle at top, rgba(15, 23, 42, 0.95), rgba(15, 23, 42, 0.9));
+            color: var(--text);
+            font-size: 0.82rem;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            transition: transform 0.1s ease, box-shadow 0.1s ease, border-color 0.1s ease, background 0.1s ease;
+        }
+
+        button.primary {
+            border-color: rgba(56, 189, 248, 0.7);
+            background: radial-gradient(circle at top, rgba(56, 189, 248, 0.22), rgba(15, 23, 42, 0.96));
+            box-shadow: 0 0 0 1px rgba(8, 47, 73, 0.9);
+        }
+
+        button:disabled {
+            opacity: 0.65;
+            cursor: default;
+            box-shadow: none;
+            transform: none;
+        }
+
+        button:not(:disabled):hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 20px rgba(15, 23, 42, 0.9);
+            border-color: rgba(148, 163, 184, 0.9);
+        }
+
+        button.primary:not(:disabled):hover {
+            border-color: rgba(56, 189, 248, 1);
+            background: radial-gradient(circle at top, rgba(56, 189, 248, 0.35), rgba(15, 23, 42, 0.98));
+        }
+
+        .status-bar {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .status-pill {
+            padding: 3px 10px;
+            border-radius: 999px;
+            background: rgba(15, 23, 42, 0.9);
+            border: 1px solid var(--border);
+        }
+
+        .status-pill.loading {
+            border-color: rgba(56, 189, 248, 0.8);
+            color: var(--accent);
+            background: rgba(15, 23, 42, 0.9);
+        }
+
+        .status-pill.error {
+            border-color: rgba(248, 113, 113, 0.85);
+            color: #fecaca;
+            background: rgba(30, 64, 175, 0.15);
+        }
+
+        .pill-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 999px;
+            background: rgba(148, 163, 184, 0.9);
+            margin-right: 4px;
+        }
+
+        .pill-dot.loading {
+            background: var(--accent);
+            box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.25);
+        }
+
+        .pill-dot.error {
+            background: #fca5a5;
+            box-shadow: 0 0 0 4px rgba(248, 113, 113, 0.25);
+        }
+
+        .output-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+
+        .tag {
+            font-size: 0.7rem;
+            padding: 2px 8px;
+            border-radius: 999px;
+            border: 1px solid rgba(75, 85, 99, 0.9);
+            color: var(--text-muted);
+        }
+
+        pre {
+            margin: 0;
+            padding: 10px 11px;
+            border-radius: 10px;
+            background: #020617;
+            border: 1px solid rgba(15, 23, 42, 0.95);
+            font-size: 0.78rem;
+            line-height: 1.5;
+            max-height: 260px;
+            overflow: auto;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .quiz-topic {
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+
+        .quiz-topic span {
+            color: var(--accent);
+        }
+
+        .question {
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px dashed rgba(31, 41, 55, 0.9);
+        }
+
+        .question:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+            margin-bottom: 0;
+        }
+
+        .question-title {
+            font-size: 0.9rem;
+            margin-bottom: 6px;
+        }
+
+        .options {
+            list-style: none;
+            padding-left: 0;
+            margin: 0;
+            font-size: 0.82rem;
+        }
+
+        .option {
+            padding: 3px 0;
+            display: flex;
+            align-items: baseline;
+            gap: 6px;
+        }
+
+        .option-label {
+            font-weight: 600;
+            color: var(--text-muted);
+            min-width: 18px;
+        }
+
+        .option-correct {
+            color: #bbf7d0;
+        }
+
+        .option-correct .option-label {
+            color: #4ade80;
+        }
+
+        .option-correct .check {
+            margin-left: 4px;
+        }
+
+        .error-block {
+            margin-top: 8px;
+        }
+
+        .note {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 6px;
+        }
+    </style>
+</head>
+<body>
+    <div class="shell">
+        <div class="app">
+            <header>
+                <div class="title-block">
+                    <h1>AZ-204 Quiz Generator (PoC)</h1>
+                    <p>Static UI served from the API host. No CORS, no extra infra.</p>
+                </div>
+                <div class="badge">
+                    <span class="badge-dot"></span>
+                    Same-origin demo UI
+                </div>
+            </header>
+
+            <div class="grid">
+                <section class="panel">
+                    <h2>Request</h2>
+
+                    <div class="form-field">
+                        <label for="topic">Topic</label>
+                        <select id="topic">
+                            <option value="azure-functions">azure-functions</option>
+                            <option value="app-service">app-service</option>
+                            <option value="azure-storage">azure-storage</option>
+                            <option value="cosmos-db">cosmos-db</option>
+                            <option value="event-grid">event-grid</option>
+                            <option value="service-bus">service-bus</option>
+                            <option value="key-vault">key-vault</option>
+                            <option value="managed-identities">managed-identities</option>
+                            <option value="api-management">api-management</option>
+                            <option value="containers">containers</option>
+                            <option value="monitoring">monitoring</option>
+                            <option value="messaging">messaging</option>
+                            <option value="security">security</option>
+                            <option value="compute">compute</option>
+                            <option value="networking">networking</option>
+                        </select>
+                        <div class="hint">Must be in the backend allowlist, otherwise you’ll see a 400.</div>
+                    </div>
+
+                    <div class="form-field">
+                        <label for="questionCount">Question count</label>
+                        <input id="questionCount" type="number" min="1" max="10" value="3" />
+                        <div class="hint">Between 1 and 10 (demo default: 3).</div>
+                    </div>
+
+                    <div class="buttons">
+                        <button id="btnHealth" type="button">
+                            <span>Health</span>
+                        </button>
+                        <button id="btnGenerate" type="button" class="primary">
+                            <span>Generate</span>
+                        </button>
+                    </div>
+
+                    <div class="status-bar">
+                        <div id="statusPill" class="status-pill">
+                            <span id="statusDot" class="pill-dot"></span>
+                            <span id="statusText">Idle</span>
+                        </div>
+                        <span class="note">Calls `/api/LearningAssistant/Health` and `/GenerateQuiz` via relative URLs.</span>
+                    </div>
+                </section>
+
+                <section class="panel">
+                    <div class="output-header">
+                        <h2>Output</h2>
+                        <span id="outputTag" class="tag">Waiting for a call…</span>
+                    </div>
+
+                    <div id="quizContainer" aria-live="polite"></div>
+
+                    <div id="healthContainer" style="margin-top: 8px;"></div>
+
+                    <div id="errorContainer" class="error-block"></div>
+                </section>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            const btnHealth = document.getElementById("btnHealth");
+            const btnGenerate = document.getElementById("btnGenerate");
+            const topicSelect = document.getElementById("topic");
+            const questionCountInput = document.getElementById("questionCount");
+
+            const statusPill = document.getElementById("statusPill");
+            const statusDot = document.getElementById("statusDot");
+            const statusText = document.getElementById("statusText");
+            const outputTag = document.getElementById("outputTag");
+            const quizContainer = document.getElementById("quizContainer");
+            const healthContainer = document.getElementById("healthContainer");
+            const errorContainer = document.getElementById("errorContainer");
+
+            function setIdleStatus() {
+                statusPill.classList.remove("loading", "error");
+                statusDot.classList.remove("loading", "error");
+                statusText.textContent = "Idle";
+            }
+
+            function setLoadingStatus(label) {
+                statusPill.classList.remove("error");
+                statusDot.classList.remove("error");
+                statusPill.classList.add("loading");
+                statusDot.classList.add("loading");
+                statusText.textContent = label || "Loading…";
+            }
+
+            function setErrorStatus(label) {
+                statusPill.classList.remove("loading");
+                statusDot.classList.remove("loading");
+                statusPill.classList.add("error");
+                statusDot.classList.add("error");
+                statusText.textContent = label || "Error";
+            }
+
+            function setBusy(isBusy) {
+                btnHealth.disabled = isBusy;
+                btnGenerate.disabled = isBusy;
+            }
+
+            function clearOutputs() {
+                quizContainer.innerHTML = "";
+                healthContainer.innerHTML = "";
+                errorContainer.innerHTML = "";
+            }
+
+            function renderPre(container, text, label) {
+                const pre = document.createElement("pre");
+                pre.textContent = text;
+
+                const wrapper = document.createElement("div");
+                if (label) {
+                    const smallLabel = document.createElement("div");
+                    smallLabel.className = "hint";
+                    smallLabel.style.marginBottom = "4px";
+                    smallLabel.textContent = label;
+                    wrapper.appendChild(smallLabel);
+                }
+                wrapper.appendChild(pre);
+                container.innerHTML = "";
+                container.appendChild(wrapper);
+            }
+
+            function renderHealth(jsonOrRaw, isJson) {
+                if (!isJson) {
+                    renderPre(healthContainer, jsonOrRaw, "Raw Health response (non-JSON)");
+                    return;
+                }
+
+                const data = jsonOrRaw;
+                const summary = document.createElement("div");
+                summary.className = "quiz-topic";
+                summary.innerHTML = [
+                    "Mode: <span>" + String(data.mode ?? data.Mode ?? "n/a") + "</span>",
+                    "ResponsesUrl: <span>" + String(data.responsesUrl ?? data.ResponsesUrl ?? "n/a") + "</span>"
+                ].join(" &nbsp;•&nbsp; ");
+
+                const pretty = JSON.stringify(data, null, 2);
+                const pre = document.createElement("pre");
+                pre.textContent = pretty;
+
+                const wrapper = document.createElement("div");
+                wrapper.appendChild(summary);
+                wrapper.appendChild(pre);
+
+                healthContainer.innerHTML = "";
+                healthContainer.appendChild(wrapper);
+            }
+
+            function renderQuiz(jsonOrRaw, isJson) {
+                if (!isJson) {
+                    renderPre(quizContainer, jsonOrRaw, "Raw GenerateQuiz response (non-JSON)");
+                    return;
+                }
+
+                const data = jsonOrRaw;
+                const topic = data.topic ?? data.Topic ?? "";
+                const questions = data.questions ?? data.Questions ?? [];
+
+                const topicEl = document.createElement("div");
+                topicEl.className = "quiz-topic";
+                topicEl.innerHTML = 'Topic: <span>' + String(topic || "(unknown)") + "</span>";
+
+                const list = document.createElement("div");
+
+                const letters = ["A", "B", "C", "D", "E", "F"];
+
+                questions.forEach((q, index) => {
+                    const questionDiv = document.createElement("div");
+                    questionDiv.className = "question";
+
+                    const title = document.createElement("div");
+                    title.className = "question-title";
+                    title.textContent = (index + 1) + ". " + String(q.question ?? q.Question ?? "");
+                    questionDiv.appendChild(title);
+
+                    const options = q.options ?? q.Options ?? [];
+                    const correctIndex = typeof q.correctOptionIndex === "number"
+                        ? q.correctOptionIndex
+                        : (typeof q.CorrectOptionIndex === "number" ? q.CorrectOptionIndex : -1);
+
+                    const ul = document.createElement("ul");
+                    ul.className = "options";
+
+                    options.forEach((opt, i) => {
+                        const li = document.createElement("li");
+                        const isCorrect = i === correctIndex;
+                        li.className = "option" + (isCorrect ? " option-correct" : "");
+
+                        const label = document.createElement("span");
+                        label.className = "option-label";
+                        label.textContent = letters[i] ?? "?";
+
+                        const text = document.createElement("span");
+                        text.textContent = String(opt);
+
+                        li.appendChild(label);
+                        li.appendChild(text);
+
+                        if (isCorrect) {
+                            const check = document.createElement("span");
+                            check.className = "check";
+                            check.textContent = "✅";
+                            li.appendChild(check);
+                        }
+
+                        ul.appendChild(li);
+                    });
+
+                    questionDiv.appendChild(ul);
+                    list.appendChild(questionDiv);
+                });
+
+                quizContainer.innerHTML = "";
+                quizContainer.appendChild(topicEl);
+                quizContainer.appendChild(list);
+            }
+
+            function showError(status, bodyText) {
+                const label = "HTTP " + status;
+                renderPre(errorContainer, bodyText || "(empty body)", label);
+            }
+
+            async function callHealth() {
+                clearOutputs();
+                setBusy(true);
+                setLoadingStatus("Calling Health…");
+                outputTag.textContent = "Health check";
+
+                try {
+                    const response = await fetch("/api/LearningAssistant/Health", {
+                        method: "GET"
+                    });
+                    const text = await response.text();
+
+                    if (!response.ok) {
+                        setErrorStatus("HTTP " + response.status);
+                        showError(response.status, text);
+                        try {
+                            const parsed = JSON.parse(text);
+                            renderHealth(parsed, true);
+                        } catch {
+                            renderHealth(text, false);
+                        }
+                        return;
+                    }
+
+                    try {
+                        const json = JSON.parse(text);
+                        renderHealth(json, true);
+                        setIdleStatus();
+                    } catch {
+                        renderHealth(text, false);
+                        setErrorStatus("Non-JSON Health response");
+                    }
+                } catch (err) {
+                    setErrorStatus("Request failed");
+                    renderPre(errorContainer, String(err), "Network / fetch error");
+                } finally {
+                    setBusy(false);
+                }
+            }
+
+            async function callGenerate() {
+                clearOutputs();
+                setBusy(true);
+                setLoadingStatus("Generating quiz…");
+                outputTag.textContent = "GenerateQuiz";
+
+                const topic = (topicSelect.value || "").trim();
+                const rawCount = questionCountInput.value;
+                const count = Number(rawCount);
+
+                if (!topic) {
+                    setBusy(false);
+                    setErrorStatus("Missing topic");
+                    renderPre(errorContainer, "Please select a topic.", "Validation");
+                    return;
+                }
+
+                if (!Number.isFinite(count) || count < 1 || count > 10) {
+                    setBusy(false);
+                    setErrorStatus("Invalid question count");
+                    renderPre(
+                        errorContainer,
+                        "Question count must be a number between 1 and 10.\nCurrent value: " + rawCount,
+                        "Validation"
+                    );
+                    return;
+                }
+
+                const payload = {
+                    topic: topic,
+                    questionCount: count
+                };
+
+                try {
+                    const response = await fetch("/api/LearningAssistant/GenerateQuiz", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify(payload)
+                    });
+
+                    const text = await response.text();
+
+                    if (!response.ok) {
+                        setErrorStatus("HTTP " + response.status);
+                        showError(response.status, text);
+                        try {
+                            const parsed = JSON.parse(text);
+                            renderQuiz(parsed, true);
+                        } catch {
+                            renderQuiz(text, false);
+                        }
+                        return;
+                    }
+
+                    try {
+                        const json = JSON.parse(text);
+                        renderQuiz(json, true);
+                        setIdleStatus();
+                    } catch {
+                        renderQuiz(text, false);
+                        setErrorStatus("Non-JSON GenerateQuiz response");
+                    }
+                } catch (err) {
+                    setErrorStatus("Request failed");
+                    renderPre(errorContainer, String(err), "Network / fetch error");
+                } finally {
+                    setBusy(false);
+                }
+            }
+
+            btnHealth.addEventListener("click", callHealth);
+            btnGenerate.addEventListener("click", callGenerate);
+
+            // Initial state
+            setIdleStatus();
+        })();
+    </script>
+</body>
+</html>
+
