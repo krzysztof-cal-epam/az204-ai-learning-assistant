@@ -124,6 +124,116 @@ public sealed class AzureOpenAiClient
         return NormalizeToJson(outputText);
     }
 
+    public async Task<string> GenerateExplanationAsync(
+        string topic,
+        string question,
+        string selectedAnswer,
+        string? correctAnswer,
+        CancellationToken cancellationToken = default)
+    {
+        var requestUri = GetResponsesUrl();
+
+        const string systemPrompt = "Return plain text only. No markdown. No code blocks.";
+
+        var userPromptBuilder = new StringBuilder();
+        userPromptBuilder.AppendLine("You are helping a learner understand a multiple-choice question.");
+        userPromptBuilder.AppendLine("Explain whether the selected answer is correct or incorrect.");
+        userPromptBuilder.AppendLine("Explain briefly why the correct answer is correct and why the other options are wrong.");
+        userPromptBuilder.AppendLine("Use 2-6 sentences. Be concise.");
+        userPromptBuilder.AppendLine();
+        userPromptBuilder.AppendLine($"Topic: {topic}");
+        userPromptBuilder.AppendLine($"Question: {question}");
+        userPromptBuilder.AppendLine($"SelectedAnswer: {selectedAnswer}");
+
+        if (!string.IsNullOrWhiteSpace(correctAnswer))
+        {
+            userPromptBuilder.AppendLine($"CorrectAnswer: {correctAnswer}");
+        }
+        else
+        {
+            userPromptBuilder.AppendLine("CorrectAnswer: (not provided, infer the most likely correct answer).");
+        }
+
+        userPromptBuilder.AppendLine();
+        userPromptBuilder.AppendLine("Requirements:");
+        userPromptBuilder.AppendLine("- Start by stating explicitly if the selected answer is correct or incorrect.");
+        userPromptBuilder.AppendLine("- Then give a short rationale.");
+        userPromptBuilder.AppendLine("- Briefly mention why the other options are not correct.");
+        userPromptBuilder.AppendLine("- Do not use markdown, bullet points, or code blocks.");
+
+        var userPrompt = userPromptBuilder.ToString();
+
+        var requestBody = new
+        {
+            model = _deploymentName,
+            input = new object[]
+            {
+                new
+                {
+                    role = "system",
+                    content = new[]
+                    {
+                        new
+                        {
+                            type = "input_text",
+                            text = systemPrompt
+                        }
+                    }
+                },
+                new
+                {
+                    role = "user",
+                    content = new[]
+                    {
+                        new
+                        {
+                            type = "input_text",
+                            text = userPrompt
+                        }
+                    }
+                }
+            }
+        };
+
+        var requestJson = JsonSerializer.Serialize(requestBody, _serializerOptions);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, requestUri);
+
+        request.Headers.Add("api-key", _apiKey);
+        request.Content = new StringContent(requestJson, Encoding.UTF8, "application/json");
+
+        using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+
+        var responseJson = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var requestUrl = response.RequestMessage?.RequestUri;
+            var url = requestUrl is null
+                ? "<unknown>"
+                : requestUrl.ToString();
+
+            var truncatedBody = responseJson.Length > 4000
+                ? responseJson[..4000]
+                : responseJson;
+
+            var message =
+                $"AzureOpenAI call failed: {(int)response.StatusCode} {response.ReasonPhrase} | Url: {url} | Body: {truncatedBody}";
+
+            throw new InvalidOperationException(message);
+        }
+
+        var outputText = ExtractOutputText(responseJson);
+
+        if (string.IsNullOrWhiteSpace(outputText))
+        {
+            var truncated = responseJson.Length > 20000 ? responseJson[..20000] : responseJson;
+            throw new InvalidOperationException($"invalid_model_output: missing_output_text | raw={truncated}");
+        }
+
+        return NormalizeToPlainText(outputText);
+    }
+
     public Uri GetResponsesUrl()
     {
         if (string.IsNullOrWhiteSpace(_endpoint) ||
@@ -253,6 +363,48 @@ public sealed class AzureOpenAiClient
         if (!t.StartsWith("{", StringComparison.Ordinal) || !t.EndsWith("}", StringComparison.Ordinal))
         {
             throw new InvalidOperationException("invalid_model_output: not_json");
+        }
+
+        return t;
+    }
+
+    private static string NormalizeToPlainText(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            throw new InvalidOperationException("invalid_model_output: empty_explanation");
+        }
+
+        var t = text.Trim();
+
+        if (t.StartsWith("```", StringComparison.Ordinal))
+        {
+            var firstNewLineIndex = t.IndexOf('\n');
+            if (firstNewLineIndex >= 0)
+            {
+                t = t[(firstNewLineIndex + 1)..];
+            }
+
+            var lastFenceIndex = t.LastIndexOf("```", StringComparison.Ordinal);
+            if (lastFenceIndex >= 0)
+            {
+                t = t[..lastFenceIndex];
+            }
+
+            t = t.Trim();
+        }
+
+        const int maxLength = 1500;
+
+        if (t.Length > maxLength)
+        {
+            // Ensure total length, including the ellipsis character, is <= 1500.
+            t = t[..(maxLength - 1)] + "…";
+        }
+
+        if (string.IsNullOrWhiteSpace(t))
+        {
+            throw new InvalidOperationException("invalid_model_output: empty_explanation_after_normalization");
         }
 
         return t;

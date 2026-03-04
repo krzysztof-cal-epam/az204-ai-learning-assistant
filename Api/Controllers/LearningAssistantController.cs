@@ -79,8 +79,19 @@ public sealed class LearningAssistantController : ControllerBase
     [ProducesResponseType(typeof(ExplainAnswerResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<ExplainAnswerResponse>> ExplainAnswer([FromBody] ExplainAnswerRequest request, CancellationToken cancellationToken)
     {
-        var result = await _assistantService.ExplainAnswerAsync(request, cancellationToken);
-        return Ok(result);
+        try
+        {
+            var result = await _assistantService.ExplainAnswerAsync(request, cancellationToken);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex) when (ex.Message == "Requested topic is not allowed.")
+        {
+            return BadRequest(new
+            {
+                error = "invalid_topic",
+                message = ex.Message
+            });
+        }
     }
 
     [HttpGet("Health")]
