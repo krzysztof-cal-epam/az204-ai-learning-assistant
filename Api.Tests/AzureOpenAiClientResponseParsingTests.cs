@@ -78,6 +78,26 @@ public sealed class AzureOpenAiClientResponseParsingTests
     }
 
     [Fact]
+    public async Task ExtractText_FallsBackToAnyOutputContentText_WhenNotFirstElement()
+    {
+        // Arrange
+        const string endpoint = "https://foo.openai.azure.com";
+        const string jsonPayload = """{"questions":[{"question":"Q1","options":["A","B","C","D"],"correctAnswer":"A"}]}""";
+
+        var responseBody =
+            $$"""{"output":[{"content":[{"type":"output_text"}]},{"content":[{"type":"output_text","text":"{{jsonPayload}}"}]}]}""";
+
+        var handler = new StubHandler(HttpStatusCode.OK, responseBody);
+        var client = CreateClient(endpoint, handler: handler);
+
+        // Act
+        var result = await client.GenerateQuizJsonAsync("topic", 1, null);
+
+        // Assert
+        Assert.Equal(jsonPayload, result);
+    }
+
+    [Fact]
     public async Task ExtractText_FallsBackToChatCompletionsShape_WhenPresent()
     {
         // Arrange

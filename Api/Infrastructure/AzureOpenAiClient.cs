@@ -275,24 +275,89 @@ public sealed class AzureOpenAiClient
             return outputTextElement.GetString();
         }
 
-        // 2) $.output[0].content[0].text
-        if (TryGetFirstOutputContent(root, out var contentElement))
+        // 2) $.output[*].content[*].text / .output_text (Responses API)
+        if (root.TryGetProperty("output", out var outputElement) &&
+            outputElement.ValueKind == JsonValueKind.Array &&
+            outputElement.GetArrayLength() > 0)
         {
-            if (contentElement.TryGetProperty("text", out var textElement) &&
-                textElement.ValueKind == JsonValueKind.String)
+            // First pass: prefer items where type is "output_text" or "text"
+            foreach (var preferredType in new[] { "output_text", "text" })
             {
-                return textElement.GetString();
+                foreach (var outputItem in outputElement.EnumerateArray())
+                {
+                    if (!outputItem.TryGetProperty("content", out var contentArray) ||
+                        contentArray.ValueKind != JsonValueKind.Array ||
+                        contentArray.GetArrayLength() == 0)
+                    {
+                        continue;
+                    }
+
+                    foreach (var contentItem in contentArray.EnumerateArray())
+                    {
+                        if (contentItem.ValueKind != JsonValueKind.Object)
+                        {
+                            continue;
+                        }
+
+                        if (!contentItem.TryGetProperty("type", out var typeElement) ||
+                            typeElement.ValueKind != JsonValueKind.String ||
+                            !string.Equals(typeElement.GetString(), preferredType, StringComparison.Ordinal))
+                        {
+                            continue;
+                        }
+
+                        if (contentItem.TryGetProperty("text", out var textElement) &&
+                            textElement.ValueKind == JsonValueKind.String &&
+                            !string.IsNullOrWhiteSpace(textElement.GetString()))
+                        {
+                            return textElement.GetString();
+                        }
+
+                        if (contentItem.TryGetProperty("output_text", out var contentOutputTextElement) &&
+                            contentOutputTextElement.ValueKind == JsonValueKind.String &&
+                            !string.IsNullOrWhiteSpace(contentOutputTextElement.GetString()))
+                        {
+                            return contentOutputTextElement.GetString();
+                        }
+                    }
+                }
             }
 
-            // 3) $.output[0].content[0].output_text (if such shape exists)
-            if (contentElement.TryGetProperty("output_text", out var contentOutputTextElement) &&
-                contentOutputTextElement.ValueKind == JsonValueKind.String)
+            // Second pass: any content item with non-empty text/output_text, regardless of type
+            foreach (var outputItem in outputElement.EnumerateArray())
             {
-                return contentOutputTextElement.GetString();
+                if (!outputItem.TryGetProperty("content", out var contentArray) ||
+                    contentArray.ValueKind != JsonValueKind.Array ||
+                    contentArray.GetArrayLength() == 0)
+                {
+                    continue;
+                }
+
+                foreach (var contentItem in contentArray.EnumerateArray())
+                {
+                    if (contentItem.ValueKind != JsonValueKind.Object)
+                    {
+                        continue;
+                    }
+
+                    if (contentItem.TryGetProperty("text", out var textElement) &&
+                        textElement.ValueKind == JsonValueKind.String &&
+                        !string.IsNullOrWhiteSpace(textElement.GetString()))
+                    {
+                        return textElement.GetString();
+                    }
+
+                    if (contentItem.TryGetProperty("output_text", out var contentOutputTextElement) &&
+                        contentOutputTextElement.ValueKind == JsonValueKind.String &&
+                        !string.IsNullOrWhiteSpace(contentOutputTextElement.GetString()))
+                    {
+                        return contentOutputTextElement.GetString();
+                    }
+                }
             }
         }
 
-        // 4) Chat completions style: $.choices[0].message.content
+        // 3) Chat completions style: $.choices[0].message.content
         if (TryGetFirstChoice(root, out var choiceElement))
         {
             if (choiceElement.TryGetProperty("message", out var messageElement) &&
@@ -300,42 +365,26 @@ public sealed class AzureOpenAiClient
                 messageElement.TryGetProperty("content", out var messageContentElement) &&
                 messageContentElement.ValueKind == JsonValueKind.String)
             {
-                return messageContentElement.GetString();
+                var messageContent = messageContentElement.GetString();
+                if (!string.IsNullOrWhiteSpace(messageContent))
+                {
+                    return messageContent;
+                }
             }
 
-            // 5) Chat completions style: $.choices[0].text
+            // 4) Chat completions style: $.choices[0].text
             if (choiceElement.TryGetProperty("text", out var choiceTextElement) &&
                 choiceTextElement.ValueKind == JsonValueKind.String)
             {
-                return choiceTextElement.GetString();
+                var choiceText = choiceTextElement.GetString();
+                if (!string.IsNullOrWhiteSpace(choiceText))
+                {
+                    return choiceText;
+                }
             }
         }
 
         return null;
-    }
-
-    private static bool TryGetFirstOutputContent(JsonElement root, out JsonElement contentElement)
-    {
-        contentElement = default;
-
-        if (!root.TryGetProperty("output", out var outputElement) ||
-            outputElement.ValueKind != JsonValueKind.Array ||
-            outputElement.GetArrayLength() == 0)
-        {
-            return false;
-        }
-
-        var firstOutput = outputElement[0];
-
-        if (!firstOutput.TryGetProperty("content", out var contentArray) ||
-            contentArray.ValueKind != JsonValueKind.Array ||
-            contentArray.GetArrayLength() == 0)
-        {
-            return false;
-        }
-
-        contentElement = contentArray[0];
-        return contentElement.ValueKind == JsonValueKind.Object;
     }
 
     private static bool TryGetFirstChoice(JsonElement root, out JsonElement choiceElement)
