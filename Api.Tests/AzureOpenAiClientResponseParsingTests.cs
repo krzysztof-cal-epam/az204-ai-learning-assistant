@@ -58,14 +58,14 @@ public sealed class AzureOpenAiClientResponseParsingTests
     }
 
     [Fact]
-    public async Task ExtractText_FallsBackToOutputContentText_WhenOutputTextMissing()
+    public async Task ExtractText_FindsTextByScanningOutputContentText()
     {
         // Arrange
         const string endpoint = "https://foo.openai.azure.com";
         const string jsonPayload = """{"questions":[{"question":"Q1","options":["A","B","C","D"],"correctAnswer":"A"}]}""";
 
         var responseBody =
-            $$"""{"output":[{"content":[{"text":"{{jsonPayload}}"}]}]}""";
+            $$"""{"output":[{"content":[{"type":"output_text","text":"{{jsonPayload}}"}]}]}""";
 
         var handler = new StubHandler(HttpStatusCode.OK, responseBody);
         var client = CreateClient(endpoint, handler: handler);
@@ -78,14 +78,14 @@ public sealed class AzureOpenAiClientResponseParsingTests
     }
 
     [Fact]
-    public async Task ExtractText_FallsBackToAnyOutputContentText_WhenNotFirstElement()
+    public async Task ExtractText_FindsTextWhenNotFirstItem()
     {
         // Arrange
         const string endpoint = "https://foo.openai.azure.com";
         const string jsonPayload = """{"questions":[{"question":"Q1","options":["A","B","C","D"],"correctAnswer":"A"}]}""";
 
         var responseBody =
-            $$"""{"output":[{"content":[{"type":"output_text"}]},{"content":[{"type":"output_text","text":"{{jsonPayload}}"}]}]}""";
+            $$"""{"output":[{"content":[{"type":"output_text"},{"type":"output_text","text":"{{jsonPayload}}"}]}]}""";
 
         var handler = new StubHandler(HttpStatusCode.OK, responseBody);
         var client = CreateClient(endpoint, handler: handler);
@@ -143,6 +143,33 @@ public sealed class AzureOpenAiClientResponseParsingTests
 
         // Assert
         Assert.Equal("https://x.services.ai.azure.com/openai/v1/responses", uri.ToString());
+    }
+
+    [Fact]
+    public async Task MissingOutputText_ThrowsWithLargeRawSnippet()
+    {
+        // Arrange
+        const string endpoint = "https://foo.openai.azure.com";
+
+        var sb = new StringBuilder();
+        sb.Append("{\"outer\":\"");
+        sb.Append(new string('x', 25000));
+        sb.Append("\",\"tail\":\"end\"}");
+
+        var responseBody = sb.ToString();
+
+        var handler = new StubHandler(HttpStatusCode.OK, responseBody);
+        var client = CreateClient(endpoint, handler: handler);
+
+        // Act
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => client.GenerateQuizJsonAsync("topic", 1, null));
+
+        // Assert
+        Assert.Contains("invalid_model_output: missing_output_text", ex.Message);
+        Assert.Contains("raw={", ex.Message);
+        Assert.Contains("tail", ex.Message);
+        Assert.True(ex.Message.Length > 5000);
     }
 
     private sealed class StubHandler : HttpMessageHandler

@@ -26,6 +26,33 @@ public sealed class LearningAssistantController : ControllerBase
         return Ok(result);
     }
 
+    [HttpGet("SmokeQuiz")]
+    [ProducesResponseType(typeof(GenerateQuizResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<GenerateQuizResponse>> SmokeQuiz(
+        [FromQuery] string topic = "azure-functions",
+        [FromQuery] int count = 3,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(topic))
+        {
+            return BadRequest("topic query parameter is required.");
+        }
+
+        if (count <= 0)
+        {
+            return BadRequest("count must be greater than zero.");
+        }
+
+        var request = new GenerateQuizRequest
+        {
+            Topic = topic,
+            QuestionCount = count
+        };
+
+        var result = await _assistantService.GenerateQuizAsync(request, cancellationToken);
+        return Ok(result);
+    }
+
     [HttpPost("ExplainAnswer")]
     [ProducesResponseType(typeof(ExplainAnswerResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<ExplainAnswerResponse>> ExplainAnswer([FromBody] ExplainAnswerRequest request, CancellationToken cancellationToken)

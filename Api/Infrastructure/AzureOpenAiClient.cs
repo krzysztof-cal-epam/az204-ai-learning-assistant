@@ -117,7 +117,7 @@ public sealed class AzureOpenAiClient
 
         if (string.IsNullOrWhiteSpace(outputText))
         {
-            var truncated = responseJson.Length > 1000 ? responseJson[..1000] : responseJson;
+            var truncated = responseJson.Length > 20000 ? responseJson[..20000] : responseJson;
             throw new InvalidOperationException($"invalid_model_output: missing_output_text | raw={truncated}");
         }
 
