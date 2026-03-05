@@ -435,7 +435,9 @@
                             <option value="security">security</option>
                             <option value="compute">compute</option>
                             <option value="networking">networking</option>
+                            <option value="__custom__">Custom (type your own…)</option>
                         </select>
+                        <input id="customTopicInput" type="text" placeholder="Type a custom topic (e.g., bitcoin)" style="display: none; margin-top: 8px;" />
                         <div class="hint">Must be in the backend allowlist, otherwise you’ll see a 400.</div>
                     </div>
 
@@ -484,6 +486,7 @@
             const btnHealth = document.getElementById("btnHealth");
             const btnGenerate = document.getElementById("btnGenerate");
             const topicSelect = document.getElementById("topic");
+            const customTopicInput = document.getElementById("customTopicInput");
             const questionCountInput = document.getElementById("questionCount");
 
             const statusPill = document.getElementById("statusPill");
@@ -754,7 +757,14 @@
                     return;
                 }
 
-                const topic = quizState.topic || (topicSelect.value || "").trim();
+                let topic = quizState.topic;
+                if (!topic) {
+                    if (topicSelect.value === "__custom__") {
+                        topic = (customTopicInput.value || "").trim();
+                    } else {
+                        topic = topicSelect.value;
+                    }
+                }
                 const selectedAnswer = q.options[q.selectedIndex];
                 const correctAnswer = (typeof q.correctOptionIndex === "number" &&
                     q.correctOptionIndex >= 0 &&
@@ -887,16 +897,25 @@
                 setLoadingStatus("Generating quiz…");
                 outputTag.textContent = "GenerateQuiz";
 
-                const topic = (topicSelect.value || "").trim();
-                const rawCount = questionCountInput.value;
-                const count = Number(rawCount);
+                let topic;
+                if (topicSelect.value === "__custom__") {
+                    topic = (customTopicInput.value || "").trim();
+                } else {
+                    topic = topicSelect.value;
+                }
 
                 if (!topic) {
                     setBusy(false);
                     setErrorStatus("Missing topic");
-                    renderPre(errorContainer, "Please select a topic.", "Validation");
+                    const message = topicSelect.value === "__custom__"
+                        ? "Please enter a custom topic."
+                        : "Please select a topic.";
+                    renderPre(errorContainer, message, "Validation");
                     return;
                 }
+
+                const rawCount = questionCountInput.value;
+                const count = Number(rawCount);
 
                 if (!Number.isFinite(count) || count < 1 || count > 10) {
                     setBusy(false);
@@ -946,6 +965,19 @@
                     setBusy(false);
                 }
             }
+
+            function updateCustomTopicVisibility() {
+                const isCustom = topicSelect.value === "__custom__";
+                customTopicInput.style.display = isCustom ? "block" : "none";
+                if (!isCustom) {
+                    customTopicInput.value = "";
+                }
+            }
+
+            topicSelect.addEventListener("change", updateCustomTopicVisibility);
+
+            // Initial visibility
+            updateCustomTopicVisibility();
 
             btnHealth.addEventListener("click", callHealth);
             btnGenerate.addEventListener("click", callGenerate);

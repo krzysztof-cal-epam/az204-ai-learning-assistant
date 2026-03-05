@@ -78,11 +78,41 @@ In the UI:
 
 If the model is slow, the UI stays on **Loading…** until a response arrives.
 
-### 6. Invalid topic example (400)
+### 6. Custom topic input (unhappy path demo)
+
+The UI now supports typing a custom topic to trigger backend allowlist validation.
+
+#### 6.1. Happy path with allowed topic
+
+1. Select `azure-functions` from the dropdown.
+2. Click **Generate**.
+3. Select an answer for a question.
+4. Click **Explain**.
+5. Observe success: explanation appears without errors.
+
+#### 6.2. Unhappy path with disallowed custom topic
+
+1. Select **Custom (type your own…)** from the dropdown.
+2. Type `bitcoin` in the custom topic input field.
+3. Click **Generate**.
+4. Observe:
+   - The UI shows an HTTP 400 error.
+   - The error payload includes `{"error":"invalid_topic","message":"Requested topic is not allowed."}`.
+
+#### 6.3. Client-side validation for empty custom topic
+
+1. Select **Custom (type your own…)** from the dropdown.
+2. Leave the custom topic input empty.
+3. Click **Generate**.
+4. Observe:
+   - No network request is made.
+   - The UI shows a validation error: "Please enter a custom topic."
+
+### 7. Invalid topic example (400)
 
 You can demonstrate backend validation using either the UI or `curl`.
 
-#### 6.1. Via UI
+#### 7.1. Via UI
 
 1. Manually type an invalid topic in the browser dev tools:
    - In the **Console**, run:
@@ -94,7 +124,7 @@ You can demonstrate backend validation using either the UI or `curl`.
    - Show an HTTP 400 status in the error block.
    - Render the JSON error payload from the API.
 
-#### 6.2. Via `curl`
+#### 7.2. Via `curl`
 
 From a terminal:
 
@@ -114,7 +144,7 @@ Content-Type: application/json; charset=utf-8
 {"error":"invalid_topic","message":"Requested topic is not allowed."}
 ```
 
-### 7. Notes
+### 8. Notes
 
 - The UI only uses **relative URLs** (`/api/LearningAssistant/Health` and `/api/LearningAssistant/GenerateQuiz`) so it runs against whichever host/port the API uses.
 - If the API ever returns a non-JSON body, the UI falls back to showing the raw response in a `<pre>` block to keep errors readable.
